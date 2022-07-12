@@ -2,12 +2,17 @@
 extern crate error_chain;
 
 pub mod errors;
+pub mod macros;
+pub mod consts;
 
 use crate::errors::*;
 use bitfinex::{api::Bitfinex, candles::CandleHistoryParams, funding::FundingOfferParams};
 use dotenv::dotenv;
 use std::env;
 use std::{thread, time};
+use env_logger;
+use log::*;
+use consts::*;
 
 #[derive(Clone)]
 struct CandleParams {
@@ -69,17 +74,21 @@ fn get_balance(api: &Bitfinex, currency: String) -> Result<(f64, f64)> {
 }
 
 fn main() {
+    let mut builder = env_logger::builder();
+    builder.filter_level(LevelFilter::Info);
+    builder.format_timestamp_secs();
+    builder.init();
     // could be given by cli later
     let symbol = "USD".to_string();
     dotenv().ok();
     let api_key = env::var("API_KEY");
     if api_key.is_err() {
-        println!("Environment variable API_KEY not set !");
+        error!("Environment variable API_KEY not set !");
         return;
     }
     let secret_key = env::var("SECRET_KEY");
     if secret_key.is_err() {
-        println!("Environment variable SECRET_KEY not set !");
+        error!("Environment variable SECRET_KEY not set !");
         return;
     }
     let api = Bitfinex::new(api_key.ok(), secret_key.ok());
@@ -104,6 +113,7 @@ fn main() {
 
         // this should never happen, max 1 offer at a time !
         if offers.len() > 1 {
+            warn!("Detected multiple available offers ! It looks like there was some manual interference, please don't do that ! Removing them ...");
             let _cancel_all = api.funding.cancel_all_funding_offers(symbol.clone());
             exit_or_unwrap!("Unable to cancel all offers", _cancel_all);
         }
@@ -115,6 +125,15 @@ fn main() {
         };
 
         let ratio = (avail + on_offer) / total;
+
+        let minimum_for_currency = *LIMIT_PER_CURRENCY.get(&symbol).unwrap();
+        if avail + on_offer < minimum_for_currency {
+            info!("Only {} available but minimum is {}, waiting for more availabilities ...", avail + on_offer, minimum_for_currency);
+            continue;
+        }
+
+        info!("{}% (${}) of the funds are available and could be lended", ratio.to_string(), (avail+on_offer).to_string());
+
         let mut nth15m: Option<Result<f64>> = None;
         let mut period = 0;
 
@@ -144,13 +163,13 @@ fn main() {
             let _cancel_all = api.funding.cancel_all_funding_offers("USD".to_string());
             exit_or_unwrap!("Unable to cancel all offers", _cancel_all);
         } else if on_offer > 0.0 {
-            println!("Set offer is good, letting it there and going to sleep");
+            info!("Set offer is good, letting it there and going to sleep");
             continue;
         }
 
         let amount = f64::min(avail + on_offer, total * 0.1);
 
-        println!(
+        info!(
             "Posted f{} offer for {} at {}% - {} days",
             symbol,
             (amount - 1.0).to_string(),
