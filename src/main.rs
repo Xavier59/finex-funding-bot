@@ -132,19 +132,19 @@ fn main() {
             continue;
         }
 
-        info!("{}% (${}) of the funds are available and could be lended", ratio.to_string(), (avail+on_offer).to_string());
+        info!("{}% (${}) of the funds are available and could be lended", (ratio*100.0).to_string(), (avail+on_offer).to_string());
 
         let mut nth15m: Option<Result<f64>> = None;
         let mut period = 0;
 
-        if ratio < 0.1 {
+        if ratio < 0.5 {
             let mut candle_params = CandleParams::default();
             candle_params.n = 3;
             nth15m = Some(get_nth_highest_candle(&api, candle_params));
             period = 120;
         }
 
-        if ratio >= 0.1
+        if ratio >= 0.5
             || (nth15m.is_some()
                 && nth15m.as_ref().unwrap().is_ok()
                 && *nth15m.as_ref().unwrap().as_ref().unwrap() < 0.0005)
