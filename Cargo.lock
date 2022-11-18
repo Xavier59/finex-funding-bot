@@ -85,7 +85,7 @@ checksum = "b41b7ea54a0c9d92199de89e20e58d49f02f8e699814ef3fdf266f6f748d15c7"
 [[package]]
 name = "bitfinex"
 version = "0.5.0"
-source = "git+https://github.com/xavier59/bitfinex-rs.git#348af16d09f97f236be5bdffb1e250f75bdab462"
+source = "git+https://github.com/xavier59/bitfinex-rs.git#107a1b493a2e63c509586e07a7fdd4e8cb11f2d7"
 dependencies = [
  "error-chain",
  "hex",
