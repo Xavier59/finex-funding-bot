@@ -1,18 +1,18 @@
 #[macro_use]
 extern crate error_chain;
 
+pub mod consts;
 pub mod errors;
 pub mod macros;
-pub mod consts;
 
 use crate::errors::*;
 use bitfinex::{api::Bitfinex, candles::CandleHistoryParams, funding::FundingOfferParams};
+use consts::*;
 use dotenv::dotenv;
-use std::env;
-use std::{thread, time};
 use env_logger;
 use log::*;
-use consts::*;
+use std::env;
+use std::{thread, time};
 
 #[derive(Clone)]
 struct CandleParams {
@@ -47,7 +47,6 @@ fn get_nth_highest_candle(api: &Bitfinex, params: CandleParams) -> Result<f64> {
     if params.n > params.limit {
         bail!("n cannot be greater than the limit");
     }
-
     let mut candles = api
         .candles
         .history("fUSD", params.tf.as_str(), &(params.clone().into()))?;
@@ -127,12 +126,20 @@ fn main() {
         let ratio = (avail + on_offer) / total;
 
         let minimum_for_currency = *LIMIT_PER_CURRENCY.get(&symbol).unwrap();
-        if avail + on_offer < minimum_for_currency {
-            info!("Only {} available but minimum is {}, waiting for more availabilities ...", avail + on_offer, minimum_for_currency);
+        if avail + on_offer < minimum_for_currency + 1.0 {
+            info!(
+                "Only {} available but minimum is {}, waiting for more availabilities ...",
+                avail + on_offer,
+                minimum_for_currency
+            );
             continue;
         }
 
-        info!("{}% (${}) of the funds are available and could be lended", (ratio*100.0).to_string(), (avail+on_offer).to_string());
+        info!(
+            "{}% (${}) of the funds are available and could be lended",
+            (ratio * 100.0).to_string(),
+            (avail + on_offer).to_string()
+        );
 
         let mut nth15m: Option<Result<f64>> = None;
         let mut period = 0;
@@ -167,13 +174,19 @@ fn main() {
             continue;
         }
 
-        let amount = f64::min(avail + on_offer, total * 0.1);
+        // support for wallet below 10x minimum
+        // as the bot otherwise try to lend out 10% of the amount and it's below minimum
+        let amount: f64 = if total < minimum_for_currency * 10.0 {
+            minimum_for_currency + 1.0
+        } else {
+            f64::min(avail + on_offer, total * 0.1)
+        };
 
         info!(
             "Posted f{} offer for {} at {}% - {} days",
             symbol,
             (amount - 1.0).to_string(),
-            rate.to_string(),
+            (rate * 100.0).to_string(),
             period
         );
 
