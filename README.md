@@ -13,7 +13,6 @@ Build docker image:
 
 Run container:
 
-`docker run -it -e API_KEY=<your-api-key> -e SECRET_KEY=<your-api-secret> --name finex-fuding-bot finex-funding-bot`
+`docker run -itd -e API_KEY=<your-api-key> -e SECRET_KEY=<your-api-secret> finex-funding-bot`
 
-**TODO 1**: fix some bug with ca certificates with docker ?   
-**TODO 2**: work for any currency
+**TODO 1**: work for any currency
