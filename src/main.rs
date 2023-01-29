@@ -143,9 +143,10 @@ fn main_loop(currency: &String) {
         }
 
         info!(
-            "{}% (${}) of the funds are available and could be lended",
+            "{}% ({} {}) of the funds are available and could be lended",
             (ratio * 100.0).to_string(),
-            (avail + on_offer).to_string()
+            (avail + on_offer).to_string(),
+            currency
         );
 
         let mut nth15m: Option<Result<f64>> = None;
