@@ -12,7 +12,7 @@ use dotenv::dotenv;
 use env_logger;
 use log::*;
 use std::env;
-use std::{thread, time};
+use std::{process, thread, time};
 
 #[derive(Clone)]
 struct CandleParams {
@@ -43,13 +43,15 @@ impl From<CandleParams> for CandleHistoryParams {
 }
 
 /// Return the "High" value of the {n}th highest candle value in the latest {n} candles of timeframe {tf}
-fn get_nth_highest_candle(api: &Bitfinex, params: CandleParams) -> Result<f64> {
+fn get_nth_highest_candle(api: &Bitfinex, currency: &String, params: CandleParams) -> Result<f64> {
     if params.n > params.limit {
         bail!("n cannot be greater than the limit");
     }
-    let mut candles = api
-        .candles
-        .history("fUSD", params.tf.as_str(), &(params.clone().into()))?;
+    let mut candles = api.candles.history(
+        format! {"f{}", currency},
+        params.tf.to_string(),
+        &(params.clone().into()),
+    )?;
     if candles.len() <= params.n as usize {
         bail!("Unexpected error while fetching the total amount of candle. Limit too big ?");
     }
@@ -63,7 +65,7 @@ fn get_balance(api: &Bitfinex, currency: String) -> Result<(f64, f64)> {
         .into_iter()
         .find(|x| x.currency == currency && x.wallet_type == "funding");
     if f_wallet.is_none() {
-        bail!("No USD funding balance found !");
+        bail!("No funding balance found !");
     }
 
     Ok((
@@ -72,48 +74,46 @@ fn get_balance(api: &Bitfinex, currency: String) -> Result<(f64, f64)> {
     ))
 }
 
-fn main() {
-    let mut builder = env_logger::builder();
-    builder.filter_level(LevelFilter::Info);
-    builder.format_timestamp_secs();
-    builder.init();
-    // could be given by cli later
-    let symbol = "USD".to_string();
-    dotenv().ok();
-    let api_key = env::var("API_KEY");
-    if api_key.is_err() {
-        error!("Environment variable API_KEY not set !");
-        return;
-    }
-    let secret_key = env::var("SECRET_KEY");
-    if secret_key.is_err() {
-        error!("Environment variable SECRET_KEY not set !");
-        return;
-    }
-    let api = Bitfinex::new(api_key.ok(), secret_key.ok());
+fn validate_env() -> (String, String) {
+    let api_key = match env::var("API_KEY") {
+        Ok(key) => key,
+        Err(_) => {
+            error!("Missing environment variable API_KEY.");
+            process::exit(1);
+        }
+    };
 
-    let mut first_loop = true;
+    let secret_key = match env::var("SECRET_KEY") {
+        Ok(key) => key,
+        Err(_) => {
+            error!("Missing environment variable SECRET_KEY.");
+            process::exit(1);
+        }
+    };
+
+    (api_key, secret_key)
+}
+
+fn main_loop(currency: &String) {
+    let (api_key, secret_key) = validate_env();
+    let api = Bitfinex::new(Some(api_key), Some(secret_key));
+
+    let minimum_for_currency = LIMIT_PER_CURRENCY.get(currency).unwrap();
 
     loop {
-        if !first_loop {
-            thread::sleep(time::Duration::from_secs(60));
-        }
-
-        first_loop = false;
-
-        let balance = get_balance(&api, symbol.clone());
-        exit_or_unwrap!("Unable to fetch balance", balance);
+        let balance = get_balance(&api, currency.clone());
+        exit_or_unwrap!("Unable to fetch balance.", balance);
 
         let (avail, total) = balance;
 
         // we also need to add what is already being offered
-        let offers = api.funding.get_active_offers(format! {"f{}", symbol});
-        exit_or_unwrap!("Unable to fetch offers !", offers);
+        let offers = api.funding.get_active_offers(format! {"f{}", currency});
+        exit_or_unwrap!("Unable to fetch offers.", offers);
 
         // this should never happen, max 1 offer at a time !
         if offers.len() > 1 {
-            warn!("Detected multiple available offers ! It looks like there was some manual interference, please don't do that ! Removing them ...");
-            let _cancel_all = api.funding.cancel_all_funding_offers(symbol.clone());
+            warn!("Detected multiple available offers! It looks like there was some manual interference, please don't do that! Removing them...");
+            let _cancel_all = api.funding.cancel_all_funding_offers(currency.clone());
             exit_or_unwrap!("Unable to cancel all offers", _cancel_all);
         }
 
@@ -125,7 +125,6 @@ fn main() {
 
         let ratio = (avail + on_offer) / total;
 
-        let minimum_for_currency = *LIMIT_PER_CURRENCY.get(&symbol).unwrap();
         if avail + on_offer < minimum_for_currency + 1.0 {
             info!(
                 "Only {} available but minimum is {}, waiting for more availabilities ...",
@@ -147,7 +146,7 @@ fn main() {
         if ratio < 0.5 {
             let mut candle_params = CandleParams::default();
             candle_params.n = 3;
-            nth15m = Some(get_nth_highest_candle(&api, candle_params));
+            nth15m = Some(get_nth_highest_candle(&api, currency, candle_params));
             period = 120;
         }
 
@@ -158,19 +157,19 @@ fn main() {
         {
             let mut candle_params = CandleParams::default();
             candle_params.n = 10;
-            nth15m = Some(get_nth_highest_candle(&api, candle_params));
+            nth15m = Some(get_nth_highest_candle(&api, currency, candle_params));
             period = 2;
         }
 
         let nth15m = nth15m.unwrap();
-        exit_or_unwrap!("Error fetching candle history !", nth15m);
+        exit_or_unwrap!("Error fetching candle history!", nth15m);
 
         let rate = nth15m * 0.99;
         if on_offer > 0.0 && (rate * 1.01 < offers[0].rate || rate * 0.99 > offers[0].rate) {
-            let _cancel_all = api.funding.cancel_all_funding_offers("USD".to_string());
-            exit_or_unwrap!("Unable to cancel all offers", _cancel_all);
+            let _cancel_all = api.funding.cancel_all_funding_offers(currency.to_string());
+            exit_or_unwrap!("Unable to cancel all offers.", _cancel_all);
         } else if on_offer > 0.0 {
-            info!("Set offer is good, letting it there and going to sleep");
+            info!("Set offer is good, letting it there and going to sleep.");
             continue;
         }
 
@@ -184,7 +183,7 @@ fn main() {
 
         info!(
             "Posted f{} offer for {} at {}% - {} days",
-            symbol,
+            currency,
             (amount - 1.0).to_string(),
             (rate * 100.0).to_string(),
             period
@@ -192,7 +191,7 @@ fn main() {
 
         let funding_offer = FundingOfferParams {
             t: "LIMIT".to_string(),
-            symbol: format!("f{}", symbol),
+            symbol: format!("f{}", currency),
             amount: (amount - 1.0).to_string(), // prevent imprecision problems
             rate: rate.to_string(),
             period,
@@ -200,5 +199,43 @@ fn main() {
 
         let _funding_offer = api.funding.submit_funding_offer(funding_offer);
         exit_or_unwrap!("Unable to post funding offer", _funding_offer);
+
+        thread::sleep(time::Duration::from_secs(60));
+    }
+}
+
+fn help() {
+    println!(
+        "usage:
+    finex-funding-bot <currency>
+    Running funding bot for the given currency"
+    );
+}
+
+fn main() {
+    let mut builder = env_logger::builder();
+    builder.filter_level(LevelFilter::Info);
+    builder.format_timestamp_secs();
+    builder.init();
+    dotenv().ok();
+
+    let args: Vec<String> = env::args().collect();
+
+    match args.len() {
+        1 => {
+            help();
+            error!("No currency provided");
+        }
+        2 => {
+            let currency = &args[1];
+            main_loop(currency)
+        }
+        3 => {
+            let currency = &args[2];
+            main_loop(currency)
+        }
+        _ => {
+            help();
+        }
     }
 }
