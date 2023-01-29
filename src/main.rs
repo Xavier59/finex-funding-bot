@@ -100,7 +100,15 @@ fn main_loop(currency: &String) {
 
     let minimum_for_currency = LIMIT_PER_CURRENCY.get(currency).unwrap();
 
+    let mut first_loop = true;
+
     loop {
+        if !first_loop {
+            thread::sleep(time::Duration::from_secs(60));
+        }
+
+        first_loop = false;
+
         let balance = get_balance(&api, currency.clone());
         exit_or_unwrap!("Unable to fetch balance.", balance);
 
@@ -199,8 +207,6 @@ fn main_loop(currency: &String) {
 
         let _funding_offer = api.funding.submit_funding_offer(funding_offer);
         exit_or_unwrap!("Unable to post funding offer", _funding_offer);
-
-        thread::sleep(time::Duration::from_secs(60));
     }
 }
 
