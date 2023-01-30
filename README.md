@@ -15,4 +15,4 @@ Run container:
 
 `docker run -itd -e API_KEY=<your-api-key> -e SECRET_KEY=<your-api-secret> finex-funding-bot`
 
-**TODO 1**: work for any currency
+Currently supports `USD`, `BTC` and `SOL` but more can easily be added writing to the [configuration file](https://github.com/Xavier59/finex-funding-bot/blob/master/src/consts.rs)
