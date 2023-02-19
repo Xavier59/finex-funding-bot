@@ -104,6 +104,8 @@ fn main() {
 
     let threshold_rate = get_env_var_or_default("THRESHOLD_RATE", "0.0005").parse::<f64>().unwrap();
 
+    let candle_limit = get_env_var_or_default("CANDLE_LIMIT", "97").parse::<i32>().unwrap();
+
     let mut first_loop = true;
 
     loop {
@@ -159,6 +161,7 @@ fn main() {
         if ratio < 0.5 {
             let mut candle_params = CandleParams::default();
             candle_params.n = 3;
+            candle_params.limit = candle_limit;
             nth15m = Some(get_nth_highest_candle(&api, candle_params));
             period = 120;
         }
@@ -170,6 +173,7 @@ fn main() {
         {
             let mut candle_params = CandleParams::default();
             candle_params.n = 10;
+            candle_params.limit = candle_limit;
             nth15m = Some(get_nth_highest_candle(&api, candle_params));
             period = 2;
         }

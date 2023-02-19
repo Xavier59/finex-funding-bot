@@ -8,9 +8,11 @@ The bot lend in batch of maximum 10% of the total lending balance (or the minimu
 ## Configuration
 | Key            | Description                                             | Default |
 |----------------|---------------------------------------------------------|---------|
-| API_KEY        | Your bitfinex api key                                   |         |
-| API_SECRET     | Your bitfinex api secret                                |         |
+| API_KEY        | Your bitfinex api key                                   | -       |
+| API_SECRET     | Your bitfinex api secret                                | -       |
 | THRESHOLD_RATE | Threshold rate for lending period of 2 days or 120 days | 0.0005  |
+| CANDLE_LIMIT   | Number of 15m candles to fetch                          | 97      |
+
 
 ## Run with Docker
 
