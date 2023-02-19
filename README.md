@@ -5,6 +5,13 @@ The bot fetches all the 15m candles of the last 24h and try to lend for 120 days
 If the rate is too low ( <0.05% / day), only lend for 2 days.  
 The bot lend in batch of maximum 10% of the total lending balance (or the minimum required to lend by bitfinex) to avoid any prolonged period without any lending activity.
 
+## Configuration
+| Key            | Description                                             | Default |
+|----------------|---------------------------------------------------------|---------|
+| API_KEY        | Your bitfinex api key                                   |         |
+| API_SECRET     | Your bitfinex api secret                                |         |
+| THRESHOLD_RATE | Threshold rate for lending period of 2 days or 120 days | 0.0005  |
+
 ## Run with Docker
 
 Build docker image:

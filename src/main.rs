@@ -72,6 +72,15 @@ fn get_balance(api: &Bitfinex, currency: String) -> Result<(f64, f64)> {
     ))
 }
 
+fn get_env_var_or_default(key: &str, default: &str) -> String {
+    let env_var = env::var(key);
+    if env_var.is_err() {
+        return default.to_string();
+    }
+
+    return env_var.unwrap();
+}
+
 fn main() {
     let mut builder = env_logger::builder();
     builder.filter_level(LevelFilter::Info);
@@ -85,12 +94,15 @@ fn main() {
         error!("Environment variable API_KEY not set !");
         return;
     }
+
     let secret_key = env::var("SECRET_KEY");
     if secret_key.is_err() {
         error!("Environment variable SECRET_KEY not set !");
         return;
     }
     let api = Bitfinex::new(api_key.ok(), secret_key.ok());
+
+    let threshold_rate = get_env_var_or_default("THRESHOLD_RATE", "0.0005").parse::<f64>().unwrap();
 
     let mut first_loop = true;
 
@@ -154,7 +166,7 @@ fn main() {
         if ratio >= 0.5
             || (nth15m.is_some()
                 && nth15m.as_ref().unwrap().is_ok()
-                && *nth15m.as_ref().unwrap().as_ref().unwrap() < 0.0005)
+                && *nth15m.as_ref().unwrap().as_ref().unwrap() < threshold_rate)
         {
             let mut candle_params = CandleParams::default();
             candle_params.n = 10;
